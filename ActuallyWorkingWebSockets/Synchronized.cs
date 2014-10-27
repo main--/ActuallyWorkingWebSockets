@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace ActuallyWorkingWebSockets
 {
@@ -32,6 +32,8 @@ namespace ActuallyWorkingWebSockets
 			{
 				if (Continuation != null)
 					throw new InvalidOperationException("multiple continuations are not supported sry bout that");
+				if (IsCompleted)
+					continuation();
 				Continuation = continuation;
 			}
 		}
@@ -51,16 +53,28 @@ namespace ActuallyWorkingWebSockets
 				Parent.FreeLock(this);
 			}
 		}
-	
+
+		public class ManualAcquisition
+		{
+			public TaskCompletionSource<LockHolder> TCS { get; set; }
+			public Task<LockHolder> Task { get { return TCS.Task; } }
+
+			public void Cancel()
+			{
+				if (!TCS.TrySetCanceled())
+					TCS.Task.Result.Dispose();
+			}
+		}
+
 		private readonly T Object;
 		private LockHolder Owner;
-		private readonly ConcurrentQueue<LockAwaitable> Queue;
+		private readonly LinkedList<LockAwaitable> Queue;
 
 		public Synchronized(T t)
 		{
 			Object = t;
 			Owner = null;
-			Queue = new ConcurrentQueue<LockAwaitable>();
+			Queue = new LinkedList<LockAwaitable>();
 		}
 
 		private void ScheduleAwaitable(LockAwaitable awaitable)
@@ -69,9 +83,21 @@ namespace ActuallyWorkingWebSockets
 			awaitable.NotifyCompletion();
 		}
 
-		public async Task<LockHolder> ManualAcquire()
+		public ManualAcquisition ManualAcquire()
 		{
-			return await this;
+			var compl = new TaskCompletionSource<LockHolder>();
+			var awaitable = GetAwaiter();
+			awaitable.OnCompleted(() => {
+				if (!compl.TrySetResult(awaitable.GetResult()))
+					awaitable.GetResult().Dispose();
+			});
+			var parent = this;
+			compl.Task.ContinueWith(task => {
+				lock (parent) {
+					this.Queue.Remove(awaitable);
+				}
+			}, TaskContinuationOptions.OnlyOnCanceled);
+			return new ManualAcquisition { TCS = compl };
 		}
 
 		public LockAwaitable GetAwaiter()
@@ -81,7 +107,7 @@ namespace ActuallyWorkingWebSockets
 				if (Owner == null)
 					ScheduleAwaitable(awaitable);
 				else
-					Queue.Enqueue(awaitable);
+					Queue.AddLast(awaitable);
 				return awaitable;
 			}
 		}
@@ -92,10 +118,11 @@ namespace ActuallyWorkingWebSockets
 				if (current != Owner)
 					throw new InvalidOperationException("dude wtf how could this happen");
 				Owner = null;
-				LockAwaitable next;
-				if (Queue.TryDequeue(out next))
-					// and schedule the next one
+				if (Queue.Count > 0) {
+					var next = Queue.First.Value;
+					Queue.RemoveFirst();
 					ScheduleAwaitable(next);
+				}
 			}
 		}
 	}

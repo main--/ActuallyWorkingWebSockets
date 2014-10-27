@@ -72,14 +72,12 @@ namespace ActuallyWorkingWebSockets
 			// or aquire the readlock and read it on our own
 			var readLockAcquire = InputStream.ManualAcquire();
 			var pongTask = pongSource.Task;
-			if (pongTask == await Task.WhenAny(readLockAcquire, pongTask)) {
+			if (pongTask == await Task.WhenAny(readLockAcquire.Task, pongTask)) {
 				System.Diagnostics.Debug.WriteLine("nice, they read it for us");
-				// once we get the lock, we can just give it back
-				using (var readLock = await readLockAcquire)
-					;
+				readLockAcquire.Cancel();
 			} else {
 				System.Diagnostics.Debug.WriteLine("welp, our work");
-				using (var readLock = await readLockAcquire)
+				using (var readLock = await readLockAcquire.Task)
 					await WebSocketProtocol.ReadFrameGroupLockAcquired(readLock, HandleControlFrame, false);
 
 				// pls tell me that this was the frame we needed
