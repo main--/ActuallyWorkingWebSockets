@@ -7,17 +7,30 @@ namespace ActuallyWorkingWebSockets
 	public class WebSocketInputStream : Stream
 	{
 		private readonly Stream Underlying;
+		private Synchronized<Stream>.LockHolder UnderlyingHolder;
 		private WebSocketProtocol.FrameHeader FrameHeader;
 		private Stream FrameStream;
 		private int FrameOffset;
 
-		public WebSocketInputStream(WebSocketProtocol.FrameHeader initialHeader, Stream underlying)
+		public WebSocketInputStream(WebSocketProtocol.FrameHeader initialHeader,
+			Synchronized<Stream>.LockHolder underlyingHolder)
 		{
-			if (!underlying.CanRead)
+			if (!underlyingHolder.LockedObject.CanRead)
 				throw new ArgumentException("Need readable Stream", "underlying");
 
-			Underlying = underlying;
+			Underlying = underlyingHolder.LockedObject;
+			UnderlyingHolder = underlyingHolder;
 			BeginReadingFrame(initialHeader);
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			if (UnderlyingHolder != null) {
+				UnderlyingHolder.Dispose();
+				UnderlyingHolder = null;
+			}
+
+			base.Dispose(disposing);
 		}
 
 		private void BeginReadingFrame(WebSocketProtocol.FrameHeader header)

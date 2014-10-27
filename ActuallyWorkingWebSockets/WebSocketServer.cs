@@ -128,26 +128,14 @@ namespace ActuallyWorkingWebSockets
 				// we no longer need the streamwriter, SWITCHING PROTOCOLS NOW
 				// ---------------------------------------------------------------
 
-				if (ClientHandler != null)
-					await ClientHandler(new WebSocketSession(netStream));
+				using (var session = new WebSocketSession(netStream))
+					if (ClientHandler != null)
+						await ClientHandler(session);
 
-				// now try to gracefully close the socket
-				await WebSocketProtocol.SendCloseFrame(netStream);
-				var closeAck = await WebSocketProtocol.ReadFrameGroup(netStream);
-				Trace.Assert(closeAck == null, "Expected close ack, but got something else instead.");
-
-				/*
-				var endframe = new byte[] { 0x88, 0 };
-				await netStream.WriteAsync(endframe, 0, endframe.Length);
-				var theirbytes = new List<byte>();
-				while (true) {
-					int i = netStream.ReadByte();
-					if (i == -1)
-						break;
-					theirbytes.Add(checked((byte)i));
-				}
-
-				Debug.WriteLine(BitConverter.ToString(theirbytes.ToArray()), "their end packet");*/
+				// We sent a Close message. Spec says that we should wait for their CloseACK now.
+				// But maybe we read a frame and it's something else. What should we do then?
+				// What if they just keep sending data? DDoS much?
+				// So we'll just close the connection.
 			}
 		}
 	}

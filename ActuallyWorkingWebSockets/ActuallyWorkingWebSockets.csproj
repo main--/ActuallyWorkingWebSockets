@@ -41,6 +41,9 @@
     <Compile Include="WebSocketProtocol.cs" />
     <Compile Include="MaskingStream.cs" />
     <Compile Include="WebSocketInputStream.cs" />
+    <Compile Include="ControlFrame.cs" />
+    <Compile Include="Synchronized.cs" />
+    <Compile Include="ControlFrameEventArgs.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

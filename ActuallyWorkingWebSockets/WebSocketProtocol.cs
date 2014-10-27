@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -72,7 +73,7 @@ namespace ActuallyWorkingWebSockets
 				maskData = null;
 		}
 
-		private static Task SendFixedFrame(Stream stream, FrameOpcode opcode, int appDataLength, bool masking, Action<byte[], int> dataWriter)
+		private static async Task SendFixedFrame(Synchronized<Stream> sStream, FrameOpcode opcode, int appDataLength, bool masking, Action<byte[], int> dataWriter)
 		{
 			int appDataOffset;
 			byte[] buffer, maskData;
@@ -84,40 +85,48 @@ namespace ActuallyWorkingWebSockets
 				for (int i = 0; i < appDataLength; i++)
 					buffer[i + appDataOffset] ^= maskData[i % 4];
 
-			return stream.WriteAsync(buffer, 0, buffer.Length);
+			using (var streamHolder = await sStream)
+				await streamHolder.LockedObject.WriteAsync(buffer, 0, buffer.Length);
 		}
 
-		public static Task SendTextFrame(Stream stream, string message, bool masking)
+		public static Task SendTextFrame(Synchronized<Stream> stream, string message, bool masking)
 		{
 			return SendFixedFrame(stream, FrameOpcode.Text, Encoding.UTF8.GetByteCount(message), masking, (buffer, appDataOffset) => {
 				Encoding.UTF8.GetBytes(message, 0, message.Length, buffer, appDataOffset);
 			});
 		}
 
-		public static Task SendByteArrayFrame(Stream stream, byte[] data, bool masking)
+		public static Task SendByteArrayFrame(Synchronized<Stream> stream, byte[] data, bool masking)
 		{
 			return SendFixedFrame(stream, FrameOpcode.Binary, data.Length, masking, (buffer, appDataOffset) => {
 				Buffer.BlockCopy(data, 0, buffer, appDataOffset, data.Length);
 			});
 		}
 
-		public static Task SendCloseFrame(Stream stream)
+		public static Task SendControlFrame(Synchronized<Stream> stream, ControlFrame frame)
 		{
-			return SendFixedFrame(stream, FrameOpcode.Close, 0, false, (a, b) => { });
+			return SendFixedFrame(stream, frame.FrameType.ToControlFrameOpcode(),
+				frame.Payload.Length, false, (buffer, appDataOffset) => {
+					Buffer.BlockCopy(frame.Payload, 0, buffer, appDataOffset, frame.Payload.Length);
+				});
 		}
 
-		public static async Task SendStream(Stream socketStream, Stream dataStream, bool masking)
+		public static async Task SendStream(Synchronized<Stream> sSocketStream, Stream dataStream, bool masking)
 		{
-			int appDataOffset;
-			byte[] header, maskData;
-			BuildFrameHeader(FrameOpcode.Binary, checked((int)dataStream.Length), masking, out maskData, out header, out appDataOffset, bareHeader: true);
+			using (var socketStreamHolder = await sSocketStream) {
+				var socketStream = socketStreamHolder.LockedObject;
 
-			await socketStream.WriteAsync(header, 0, header.Length);
+				int appDataOffset;
+				byte[] header, maskData;
+				BuildFrameHeader(FrameOpcode.Binary, checked((int)dataStream.Length), masking, out maskData, out header, out appDataOffset, bareHeader: true);
 
-			if (masking)
-				socketStream = new MaskingStream(socketStream, maskData);
+				await socketStream.WriteAsync(header, 0, header.Length);
 
-			await dataStream.CopyToAsync(socketStream);
+				if (masking)
+					socketStream = new MaskingStream(socketStream, maskData);
+
+				await dataStream.CopyToAsync(socketStream);
+			}
 		}
 
 
@@ -156,22 +165,29 @@ namespace ActuallyWorkingWebSockets
 			return new FrameHeader { Opcode = opcode, GroupIsComplete = complete, IsMasked = isMasked, PayloadLength = payloadLength, MaskData = maskData };
 		}
 
-		public static async Task<object> ReadFrameGroup(Stream stream)
+		public static async Task<object> ReadFrameGroup(Synchronized<Stream> stream, Func<ControlFrame, Task> controlFrameHandler)
 		{
+			using (var streamHolder = await stream)
+				return await ReadFrameGroupLockAcquired(streamHolder, controlFrameHandler);
+		}
+
+		public static async Task<object> ReadFrameGroupLockAcquired(Synchronized<Stream>.LockHolder streamHolder, Func<ControlFrame, Task> controlFrameHandler, bool loop = true)
+		{
+			var stream = streamHolder.LockedObject;
 			var textFragments = new List<byte[]>(1);
-			while (true) {
+			do {
 				var header = await ReadFrameHeader(stream);
 				switch (header.Opcode) {
 				case FrameOpcode.Binary:
 					if (textFragments.Count > 0)
 						throw new InvalidDataException();
-					return new WebSocketInputStream(header, stream);
+					return new WebSocketInputStream(header, streamHolder);
 				case FrameOpcode.Continuation:
 					// we don't have to expect that the client breaks the protocol
 					// if this continues binary, we already returned the stream
 				case FrameOpcode.Text:
 					var buffer = await (header.IsMasked ? new MaskingStream(stream,
-						header.MaskData) : stream).ReadAllBytesAsync(header.PayloadLength);
+						             header.MaskData) : stream).ReadAllBytesAsync(header.PayloadLength);
 
 					textFragments.Add(buffer);
 					if (header.GroupIsComplete) {
@@ -189,12 +205,25 @@ namespace ActuallyWorkingWebSockets
 					}
 
 					break;
+				case FrameOpcode.Ping:
+				case FrameOpcode.Pong:
 				case FrameOpcode.Close:
-					return null;
+					await HandleControlFrame(header, stream, controlFrameHandler);
+					break;
 				default:
 					throw new InvalidDataException("unknown opcode");
 				}
-			}
+			} while (loop);
+			return null;
+		}
+
+		public static async Task HandleControlFrame(FrameHeader header, Stream stream, Func<ControlFrame, Task> handler)
+		{
+			var payload = await (header.IsMasked ? new MaskingStream(stream,
+				header.MaskData) : stream).ReadAllBytesAsync(header.PayloadLength);
+			if (!header.GroupIsComplete)
+				throw new InvalidDataException("RFC states that control frames must not be fragmented");
+			await handler(new ControlFrame { FrameType = header.Opcode.ToControlFrameType(), Payload = payload });
 		}
 	}
 }

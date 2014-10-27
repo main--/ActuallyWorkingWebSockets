@@ -38,6 +38,34 @@ namespace ActuallyWorkingWebSockets
 			Array.Reverse(data);
 			return data;
 		}
+
+		public static ControlFrame.Type ToControlFrameType(this FrameOpcode opcode)
+		{
+			switch (opcode) {
+			case FrameOpcode.Close:
+				return ControlFrame.Type.Close;
+			case FrameOpcode.Ping:
+				return ControlFrame.Type.Ping;
+			case FrameOpcode.Pong:
+				return ControlFrame.Type.Pong;
+			default:
+				throw new InvalidOperationException("that opcode is not for a control frame!");
+			}
+		}
+
+		public static FrameOpcode ToControlFrameOpcode(this ControlFrame.Type opcode)
+		{
+			switch (opcode) {
+			case ControlFrame.Type.Close:
+				return FrameOpcode.Close;
+			case ControlFrame.Type.Ping:
+				return FrameOpcode.Ping;
+			case ControlFrame.Type.Pong:
+				return FrameOpcode.Pong;
+			default:
+				throw new InvalidOperationException("that opcode is not for a control frame!");
+			}
+		}
 	}
 }
 
