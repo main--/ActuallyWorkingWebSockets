@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace ActuallyWorkingWebSockets
 {
@@ -30,20 +31,22 @@ namespace ActuallyWorkingWebSockets
 				FrameStream = Underlying;
 		}
 
-		void CheckEndOfFrame()
+		private bool CheckEndOfFrame()
 		{
 			if (FrameOffset >= FrameHeader.PayloadLength)
 				// end of frame
 				if (FrameHeader.GroupIsComplete)
-					return 0;
+					return true;
 				else
 					// read another header and continue with the next group:
 					BeginReadingFrame(WebSocketProtocol.ReadFrameHeader(Underlying).Result);
+			return false;
 		}
 
 		public override int Read(byte[] buffer, int offset, int count)
 		{
-			CheckEndOfFrame();
+			if (CheckEndOfFrame())
+				return 0;
 			var bytesToRead = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
 			FrameOffset += count;
 			return FrameStream.Read(buffer, offset, bytesToRead);
@@ -51,7 +54,8 @@ namespace ActuallyWorkingWebSockets
 
 		public override System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
 		{
-			CheckEndOfFrame();
+			if (CheckEndOfFrame())
+				return Task.FromResult(0);
 			var bytesToRead = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
 			FrameOffset += count;
 			return FrameStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
@@ -59,7 +63,8 @@ namespace ActuallyWorkingWebSockets
 
 		public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
 		{
-			CheckEndOfFrame();
+			if (CheckEndOfFrame())
+				count = 0; // I don't wanna mess with IAsyncResult, so let's do it the simple but inefficient way
 			var bytesToRead = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
 			FrameOffset += count;
 			return FrameStream.BeginRead(buffer, offset, bytesToRead, callback, state);
