@@ -52,7 +52,7 @@ namespace ActuallyWorkingWebSockets
 					try {
 						finished.Wait();
 					} catch (AggregateException e) {
-						Trace.WriteLine(e);
+						Trace.WriteLine(e, "WebSocketServer: Exception while handling client");
 					}
 					Debug.WriteLine("client rekt");
 				}
