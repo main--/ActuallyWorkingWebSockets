@@ -62,27 +62,23 @@ namespace ActuallyWorkingWebSockets
 		{
 			if (CheckEndOfFrame())
 				return 0;
-			var bytesToRead = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
-			FrameOffset += count;
-			return FrameStream.Read(buffer, offset, bytesToRead);
+
+			count = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
+
+			int ret = FrameStream.Read(buffer, offset, count);
+			FrameOffset += ret;
+			return ret;
 		}
 
-		public override System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
+		public override async System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
 		{
 			if (CheckEndOfFrame())
-				return Task.FromResult(0);
-			var bytesToRead = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
-			FrameOffset += count;
-			return FrameStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
-		}
-
-		public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-		{
-			if (CheckEndOfFrame())
-				count = 0; // I don't wanna mess with IAsyncResult, so let's do it the simple but inefficient way
-			var bytesToRead = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
-			FrameOffset += count;
-			return FrameStream.BeginRead(buffer, offset, bytesToRead, callback, state);
+				return 0;
+			count = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
+			System.Diagnostics.Debug.Assert(count > 0, "WSIS: illegal count", String.Format("offset={2} count={0} buffer.Length={1}", count, buffer.Length, offset));
+			int ret = await FrameStream.ReadAsync(buffer, offset, count, cancellationToken);
+			FrameOffset += ret;
+			return ret;
 		}
 
 		public override void Flush()
@@ -109,9 +105,9 @@ namespace ActuallyWorkingWebSockets
 		public override bool CanWrite { get { return false; } }
 
 		public override bool CanSeek { get { return false; } }
-		public override long Length { get { return FrameStream.Length; } }
+		public override long Length { get { throw new NotSupportedException(); } }
 		public override long Position {
-			get { return FrameStream.Position; }
+			get { throw new NotSupportedException(); }
 			set { throw new NotSupportedException(); }
 		}
 	}

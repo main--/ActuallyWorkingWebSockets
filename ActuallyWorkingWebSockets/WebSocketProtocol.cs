@@ -151,15 +151,16 @@ namespace ActuallyWorkingWebSockets
 				throw new InvalidDataException("extensions not supported");
 
 			System.Diagnostics.Debug.WriteLine(complete, "complete");
+
 			var secondByte = await stream.ReadByteAsync();
 			var isMasked = (secondByte & FLAG2_MASK) != 0;
 			int payloadLength = secondByte & ~FLAG2_MASK;
 			System.Diagnostics.Debug.WriteLine(payloadLength, "payloadLength pre");
 			// need to reverse them cause endianness or something
 			if (payloadLength == 126)
-				payloadLength = BitConverter.ToInt16(Util.ReverseArray(await stream.ReadAllBytesAsync(2)), 0);
+				payloadLength = checked((int)BitConverter.ToUInt16(Util.ReverseArray(await stream.ReadAllBytesAsync(2)), 0));
 			else if (payloadLength == 127)
-				payloadLength = BitConverter.ToInt32(Util.ReverseArray(await stream.ReadAllBytesAsync(4)), 0);
+				payloadLength = checked((int)BitConverter.ToUInt64(Util.ReverseArray(await stream.ReadAllBytesAsync(8)), 0));
 			System.Diagnostics.Debug.WriteLine(payloadLength, "payloadLength post");
 
 			var maskData = isMasked ? await stream.ReadAllBytesAsync(4) : null;

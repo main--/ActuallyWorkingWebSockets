@@ -26,8 +26,8 @@ namespace ActuallyWorkingWebSockets
 				throw new ArgumentOutOfRangeException("I don't even ...");
 			#endif
 
-			for (int i = 0; i < buffer.Length; i++)
-				buffer[i] ^= MaskData[MaskOffset++ % 4];
+			for (int i = 0; i < count; i++)
+				buffer[offset + i] ^= MaskData[MaskOffset++ % 4];
 		}
 
 		public override int Read(byte[] buffer, int offset, int count)
