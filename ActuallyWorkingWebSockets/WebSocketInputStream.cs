@@ -35,6 +35,7 @@ namespace ActuallyWorkingWebSockets
 
 		private void BeginReadingFrame(WebSocketProtocol.FrameHeader header)
 		{
+			System.Diagnostics.Debug.WriteLine(header.PayloadLength, "WSIS: got next frame");
 			FrameHeader = header;
 			FrameOffset = 0;
 
@@ -46,6 +47,7 @@ namespace ActuallyWorkingWebSockets
 
 		private bool CheckEndOfFrame()
 		{
+			System.Diagnostics.Debug.WriteLineIf(FrameOffset >= FrameHeader.PayloadLength, FrameHeader.GroupIsComplete, "WSIS: end of frame, is group complete?");
 			if (FrameOffset >= FrameHeader.PayloadLength)
 				// end of frame
 				if (FrameHeader.GroupIsComplete)

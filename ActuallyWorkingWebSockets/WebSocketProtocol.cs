@@ -143,12 +143,14 @@ namespace ActuallyWorkingWebSockets
 		{
 			var firstByte = await stream.ReadByteAsync();
 			var opcode = (FrameOpcode)(firstByte & 0x0F);
+			System.Diagnostics.Debug.WriteLine(opcode, "opcode");
 
 			var flags = firstByte & 0xF0;
 			var complete = (flags == FLAG1_FIN);
 			if ((flags & ~FLAG1_FIN) != 0)
 				throw new InvalidDataException("extensions not supported");
 
+			System.Diagnostics.Debug.WriteLine(complete, "complete");
 			var secondByte = await stream.ReadByteAsync();
 			var isMasked = (secondByte & FLAG2_MASK) != 0;
 			int payloadLength = secondByte & ~FLAG2_MASK;

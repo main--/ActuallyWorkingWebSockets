@@ -19,6 +19,13 @@ namespace ActuallyWorkingWebSockets
 
 		private void MaskBuffer(byte[] buffer, int offset, int count, ref int MaskOffset)
 		{
+			#if DEBUG
+			if ((offset + count) > buffer.Length)
+				throw new ArgumentOutOfRangeException(String.Format("offset={0} count={1} buffer.Length={2}", offset, count, buffer.Length));
+			if (MaskData.Length != 4)
+				throw new ArgumentOutOfRangeException("I don't even ...");
+			#endif
+
 			for (int i = 0; i < buffer.Length; i++)
 				buffer[i] ^= MaskData[MaskOffset++ % 4];
 		}
