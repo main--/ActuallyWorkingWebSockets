@@ -170,8 +170,7 @@ namespace ActuallyWorkingWebSockets
 
 		public static async Task<object> ReadFrameGroup(Synchronized<Stream> stream, Func<ControlFrame, Task> controlFrameHandler)
 		{
-			using (var streamHolder = await stream)
-				return await ReadFrameGroupLockAcquired(streamHolder, controlFrameHandler);
+			return await ReadFrameGroupLockAcquired(await stream, controlFrameHandler);
 		}
 
 		public static async Task<object> ReadFrameGroupLockAcquired(Synchronized<Stream>.LockHolder streamHolder, Func<ControlFrame, Task> controlFrameHandler, bool loop = true)
@@ -194,8 +193,10 @@ namespace ActuallyWorkingWebSockets
 
 					textFragments.Add(buffer);
 					if (header.GroupIsComplete) {
-						if (textFragments.Count == 1)
+						if (textFragments.Count == 1) {
+							streamHolder.Dispose();
 							return Encoding.UTF8.GetString(buffer);
+						}
 
 						var finalBuffer = new byte[textFragments.Sum(array => array.Length)];
 						int offset = 0;
@@ -204,6 +205,7 @@ namespace ActuallyWorkingWebSockets
 							offset += part.Length;
 						}
 
+						streamHolder.Dispose();
 						return Encoding.UTF8.GetString(finalBuffer);
 					}
 
@@ -217,6 +219,7 @@ namespace ActuallyWorkingWebSockets
 					throw new InvalidDataException("unknown opcode");
 				}
 			} while (loop);
+			streamHolder.Dispose();
 			return null;
 		}
 
