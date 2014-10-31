@@ -37,7 +37,7 @@ namespace ActuallyWorkingWebSockets
 			}
 
 			// TODO: implement extensions
-			int bufferLength = 2 + ((((int)plm) - 7) / 8) + (masking ? 4 : 0) + (bareHeader ? 0 : appDataLength);
+			int bufferLength = 2 + (((int)plm) / 8) + (masking ? 4 : 0) + (bareHeader ? 0 : appDataLength);
 			buffer = new byte[bufferLength];
 			buffer[0] = (byte)((byte)opcode | FLAG1_FIN);
 
@@ -48,12 +48,13 @@ namespace ActuallyWorkingWebSockets
 				break;
 			case PayloadLengthMode.Medium:
 				buffer[1] = 126;
-				var shortLength = BitConverter.GetBytes(checked((UInt16)appDataLength));
+				var shortLength = Util.ReverseArray(BitConverter.GetBytes(checked((UInt16)appDataLength)));
 				Array.Copy(shortLength, 0, buffer, 2, shortLength.Length);
 				appDataOffset = 4;
 				break;
 			case PayloadLengthMode.Long:
-				var longLength = BitConverter.GetBytes(checked((UInt64)appDataLength));
+				buffer[1] = 127;
+				var longLength = Util.ReverseArray(BitConverter.GetBytes(checked((UInt64)appDataLength)));
 				Array.Copy(longLength, 0, buffer, 2, longLength.Length);
 				appDataOffset = 10;
 				break;

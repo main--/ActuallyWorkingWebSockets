@@ -6,8 +6,8 @@ namespace ActuallyWorkingWebSockets
 	{
 		None = -1,
 		Short = 7,
-		Medium = 7+16,
-		Long = 7+64,
+		Medium = 16,
+		Long = 64,
 	}
 }
 
