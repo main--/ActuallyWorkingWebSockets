@@ -17,7 +17,7 @@ namespace ActuallyWorkingWebSockets
 		private readonly Socket Listener;
 		public Func<WebSocketSession, Task> ClientHandler { get; set; }
 
-        public Regex StatusRegex = new Regex(@"GET (.*) HTTP/1\..");
+		private static readonly Regex StatusRegex = new Regex(@"GET (.*) HTTP/1\..");
 
 		public WebSocketServer(IPEndPoint listenEP)
 		{
@@ -87,20 +87,19 @@ namespace ActuallyWorkingWebSockets
 		private async Task HandleClientAsnyc(Socket client)
 		{
 			Debug.WriteLine("handling");
-            string requestUri;
-            using (var netStream = new NetworkStream(client, ownsSocket: true)) {
+			using (var netStream = new NetworkStream(client, ownsSocket: true)) {
 				Debug.WriteLine("made netstream");
+				string requestUri;
 				var headers = new Dictionary<string, string>();
 				using (var reader = new StreamReader(netStream, Encoding.ASCII, false, bufferSize: 1024, leaveOpen: true)) {
 					string status = await reader.ReadLineAsync();
 
-                    
-                    if(!StatusRegex.IsMatch(status))
-                        return; // Invalid headers, fuck it. 
+					if (!StatusRegex.IsMatch(status))
+						return; // Invalid headers, fuck it. 
 
-                    requestUri = StatusRegex.Match(status).Groups[1].Value;
+					requestUri = StatusRegex.Match(status).Groups[1].Value;
 
-                    string line;
+					string line;
 					do {
 						line = await reader.ReadLineAsync();
 						foreach (var header in KnownHeaders)
