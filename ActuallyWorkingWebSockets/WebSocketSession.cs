@@ -4,6 +4,7 @@ using System.Text;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
 
 namespace ActuallyWorkingWebSockets
 {
@@ -19,6 +20,13 @@ namespace ActuallyWorkingWebSockets
 		/// <value><c>true</c> if masking; otherwise, <c>false</c>.</value>
 		public bool Masking { get; set; }
 
+        /// <summary>
+        /// The URL requested by the client e.g. "/websocket?x=y"
+        /// </summary>
+        public string RequestUrl { get; private set; }
+
+        public IPEndPoint RemoteEndPoint { get; private set; }
+
 		/// <summary>
 		/// Gets or sets a value indicating whether this <see cref="ActuallyWorkingWebSockets.WebSocketSession"/>
 		/// automatically sends pong frames in response to ping frames.
@@ -28,8 +36,10 @@ namespace ActuallyWorkingWebSockets
 
 		public event EventHandler<ControlFrameEventArgs> OnControlFrame;
 
-		public WebSocketSession(Stream stream)
+		public WebSocketSession(Stream stream, string requestUrl, IPEndPoint remoteAddress)
 		{
+            RequestUrl = requestUrl;
+            RemoteEndPoint = remoteAddress;
 			OutputStream = new Synchronized<Stream>(stream);
 			InputStream = new Synchronized<Stream>(stream);
 		}

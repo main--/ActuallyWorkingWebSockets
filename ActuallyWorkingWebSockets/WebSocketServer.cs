@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace ActuallyWorkingWebSockets
 {
@@ -15,6 +16,8 @@ namespace ActuallyWorkingWebSockets
 	{
 		private readonly Socket Listener;
 		public Func<WebSocketSession, Task> ClientHandler { get; set; }
+
+        public Regex StatusRegex = new Regex(@"GET (.*) HTTP/1\..");
 
 		public WebSocketServer(IPEndPoint listenEP)
 		{
@@ -84,14 +87,20 @@ namespace ActuallyWorkingWebSockets
 		private async Task HandleClientAsnyc(Socket client)
 		{
 			Debug.WriteLine("handling");
-			using (var netStream = new NetworkStream(client, ownsSocket: true)) {
+            string requestUri;
+            using (var netStream = new NetworkStream(client, ownsSocket: true)) {
 				Debug.WriteLine("made netstream");
 				var headers = new Dictionary<string, string>();
 				using (var reader = new StreamReader(netStream, Encoding.ASCII, false, bufferSize: 1024, leaveOpen: true)) {
 					string status = await reader.ReadLineAsync();
-					Trace.Assert(status == "GET / HTTP/1.1", "request status check failed", "Actual request status was: '" + status + "'");
 
-					string line;
+                    
+                    if(!StatusRegex.IsMatch(status))
+                        return; // Invalid headers, fuck it. 
+
+                    requestUri = StatusRegex.Match(status).Groups[1].Value;
+
+                    string line;
 					do {
 						line = await reader.ReadLineAsync();
 						foreach (var header in KnownHeaders)
@@ -128,7 +137,7 @@ namespace ActuallyWorkingWebSockets
 				// we no longer need the streamwriter, SWITCHING PROTOCOLS NOW
 				// ---------------------------------------------------------------
 
-				using (var session = new WebSocketSession(netStream))
+				using (var session = new WebSocketSession(netStream, requestUri, (IPEndPoint)client.RemoteEndPoint))
 					if (ClientHandler != null)
 						await ClientHandler(session);
 
