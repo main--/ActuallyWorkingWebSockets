@@ -215,6 +215,8 @@ namespace ActuallyWorkingWebSockets
 				case FrameOpcode.Pong:
 				case FrameOpcode.Close:
 					await HandleControlFrame(header, stream, controlFrameHandler);
+					if (header.Opcode == FrameOpcode.Close)
+						return null;
 					break;
 				default:
 					throw new InvalidDataException("unknown opcode");
