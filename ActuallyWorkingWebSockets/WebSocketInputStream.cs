@@ -45,7 +45,7 @@ namespace ActuallyWorkingWebSockets
 				FrameStream = Underlying;
 		}
 
-		private bool CheckEndOfFrame()
+		private async Task<bool> CheckEndOfFrame()
 		{
 			System.Diagnostics.Debug.WriteLineIf(FrameOffset >= FrameHeader.PayloadLength, FrameHeader.GroupIsComplete, "WSIS: end of frame, is group complete?");
 			if (FrameOffset >= FrameHeader.PayloadLength)
@@ -54,13 +54,13 @@ namespace ActuallyWorkingWebSockets
 					return true;
 				else
 					// read another header and continue with the next group:
-					BeginReadingFrame(WebSocketProtocol.ReadFrameHeader(Underlying).Result);
+					BeginReadingFrame(await WebSocketProtocol.ReadFrameHeader(Underlying));
 			return false;
 		}
 
 		public override int Read(byte[] buffer, int offset, int count)
 		{
-			if (CheckEndOfFrame())
+			if (CheckEndOfFrame().Result)
 				return 0;
 
 			count = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
@@ -70,10 +70,11 @@ namespace ActuallyWorkingWebSockets
 			return ret;
 		}
 
-		public override async System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
+		public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
 		{
-			if (CheckEndOfFrame())
+			if (await CheckEndOfFrame())
 				return 0;
+
 			count = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
 			System.Diagnostics.Debug.Assert(count > 0, "WSIS: illegal count", String.Format("offset={2} count={0} buffer.Length={1}", count, buffer.Length, offset));
 			int ret = await FrameStream.ReadAsync(buffer, offset, count, cancellationToken);
