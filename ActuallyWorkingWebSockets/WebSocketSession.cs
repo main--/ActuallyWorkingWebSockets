@@ -114,6 +114,11 @@ namespace ActuallyWorkingWebSockets
 			return read;
 		}
 
+		public Task<object> ReceiveAnyMessage()
+		{
+			return WebSocketProtocol.ReadFrameGroup(InputStream, HandleControlFrame);
+		}
+
 		private async Task HandleControlFrame(ControlFrame frame)
 		{
 			var eventargs = new ControlFrameEventArgs(frame);
