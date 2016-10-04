@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ActuallyWorkingWebSockets
@@ -45,7 +46,7 @@ namespace ActuallyWorkingWebSockets
 				FrameStream = Underlying;
 		}
 
-		private async Task<bool> CheckEndOfFrame()
+		private async Task<bool> CheckEndOfFrame(CancellationToken token)
 		{
 			System.Diagnostics.Debug.WriteLineIf(FrameOffset >= FrameHeader.PayloadLength, FrameHeader.GroupIsComplete, "WSIS: end of frame, is group complete?");
 			if (FrameOffset >= FrameHeader.PayloadLength)
@@ -54,13 +55,13 @@ namespace ActuallyWorkingWebSockets
 					return true;
 				else
 					// read another header and continue with the next group:
-					BeginReadingFrame(await WebSocketProtocol.ReadFrameHeader(Underlying));
+					BeginReadingFrame(await WebSocketProtocol.ReadFrameHeader(Underlying, token));
 			return false;
 		}
 
 		public override int Read(byte[] buffer, int offset, int count)
 		{
-			if (CheckEndOfFrame().Result)
+			if (CheckEndOfFrame(CancellationToken.None).Result)
 				return 0;
 
 			count = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);
@@ -70,9 +71,9 @@ namespace ActuallyWorkingWebSockets
 			return ret;
 		}
 
-		public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
+		public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
 		{
-			if (await CheckEndOfFrame())
+			if (await CheckEndOfFrame(cancellationToken))
 				return 0;
 
 			count = Math.Min(FrameHeader.PayloadLength - FrameOffset, count);

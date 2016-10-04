@@ -88,7 +88,7 @@ namespace ActuallyWorkingWebSockets
 			} else {
 				System.Diagnostics.Debug.WriteLine("welp, our work");
 				using (var readLock = await readLockAcquire.Task)
-					await WebSocketProtocol.ReadFrameGroupLockAcquired(readLock, HandleControlFrame, false);
+					await WebSocketProtocol.ReadFrameGroupLockAcquired(readLock, HandleControlFrame, token, false);
 
 				// pls tell me that this was the frame we needed
 				if (!pongTask.IsCompleted)
@@ -98,25 +98,27 @@ namespace ActuallyWorkingWebSockets
 			OnControlFrame -= completionTrigger;
 		}
 
-		public async Task<string> ReceiveTextMessage()
+		public Task<string> ReceiveTextMessage(CancellationToken token = default(CancellationToken))
 		{
-			var read = await WebSocketProtocol.ReadFrameGroup(InputStream, HandleControlFrame) as string;
-			if (read == null)
-				throw new InvalidOperationException("wanted to read string but got something else");
-			return read;
+			return ReceiveSpecificMessage<string>(token);
 		}
 
-		public async Task<Stream> ReceiveBinaryMessage()
+		public Task<Stream> ReceiveBinaryMessage(CancellationToken token = default(CancellationToken))
 		{
-			var read = await WebSocketProtocol.ReadFrameGroup(InputStream, HandleControlFrame) as Stream;
-			if (read == null)
-				throw new InvalidOperationException("wanted to read stream but got something else");
-			return read;
+			return ReceiveSpecificMessage<Stream>(token);
 		}
 
-		public Task<object> ReceiveAnyMessage()
+		public Task<object> ReceiveAnyMessage(CancellationToken token = default(CancellationToken))
 		{
-			return WebSocketProtocol.ReadFrameGroup(InputStream, HandleControlFrame);
+			return WebSocketProtocol.ReadFrameGroup(InputStream, HandleControlFrame, token);
+		}
+
+		private async Task<T> ReceiveSpecificMessage<T>(CancellationToken token) where T : class
+		{
+			var read = await ReceiveAnyMessage(token) as T;
+			if (read == null)
+				throw new InvalidOperationException("wanted to read " + typeof(T).Name + " but got something else");
+			return read;
 		}
 
 		private async Task HandleControlFrame(ControlFrame frame)

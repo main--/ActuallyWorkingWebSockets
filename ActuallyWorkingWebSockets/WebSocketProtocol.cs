@@ -140,9 +140,9 @@ namespace ActuallyWorkingWebSockets
 			public byte[] MaskData { get; set; }
 		}
 
-		public static async Task<FrameHeader> ReadFrameHeader(Stream stream)
+		public static async Task<FrameHeader> ReadFrameHeader(Stream stream, CancellationToken token)
 		{
-			var firstByte = await stream.ReadByteAsync();
+			var firstByte = await stream.ReadByteAsync(token);
 			var opcode = (FrameOpcode)(firstByte & 0x0F);
 			System.Diagnostics.Debug.WriteLine(opcode, "opcode");
 
@@ -153,33 +153,33 @@ namespace ActuallyWorkingWebSockets
 
 			System.Diagnostics.Debug.WriteLine(complete, "complete");
 
-			var secondByte = await stream.ReadByteAsync();
+			var secondByte = await stream.ReadByteAsync(token);
 			var isMasked = (secondByte & FLAG2_MASK) != 0;
 			int payloadLength = secondByte & ~FLAG2_MASK;
 			System.Diagnostics.Debug.WriteLine(payloadLength, "payloadLength pre");
 			// need to reverse them cause endianness or something
 			if (payloadLength == 126)
-				payloadLength = checked((int)BitConverter.ToUInt16(Util.ReverseArray(await stream.ReadAllBytesAsync(2)), 0));
+				payloadLength = checked((int)BitConverter.ToUInt16(Util.ReverseArray(await stream.ReadAllBytesAsync(2, token)), 0));
 			else if (payloadLength == 127)
-				payloadLength = checked((int)BitConverter.ToUInt64(Util.ReverseArray(await stream.ReadAllBytesAsync(8)), 0));
+				payloadLength = checked((int)BitConverter.ToUInt64(Util.ReverseArray(await stream.ReadAllBytesAsync(8, token)), 0));
 			System.Diagnostics.Debug.WriteLine(payloadLength, "payloadLength post");
 
-			var maskData = isMasked ? await stream.ReadAllBytesAsync(4) : null;
+			var maskData = isMasked ? await stream.ReadAllBytesAsync(4, token) : null;
 
 			return new FrameHeader { Opcode = opcode, GroupIsComplete = complete, IsMasked = isMasked, PayloadLength = payloadLength, MaskData = maskData };
 		}
 
-		public static async Task<object> ReadFrameGroup(Synchronized<Stream> stream, Func<ControlFrame, Task> controlFrameHandler)
+		public static async Task<object> ReadFrameGroup(Synchronized<Stream> stream, Func<ControlFrame, Task> controlFrameHandler, CancellationToken token)
 		{
-			return await ReadFrameGroupLockAcquired(await stream, controlFrameHandler);
+			return await ReadFrameGroupLockAcquired(await stream, controlFrameHandler, token);
 		}
 
-		public static async Task<object> ReadFrameGroupLockAcquired(Synchronized<Stream>.LockHolder streamHolder, Func<ControlFrame, Task> controlFrameHandler, bool loop = true)
+		public static async Task<object> ReadFrameGroupLockAcquired(Synchronized<Stream>.LockHolder streamHolder, Func<ControlFrame, Task> controlFrameHandler, CancellationToken token, bool loop = true)
 		{
 			var stream = streamHolder.LockedObject;
 			var textFragments = new List<byte[]>(1);
 			do {
-				var header = await ReadFrameHeader(stream);
+				var header = await ReadFrameHeader(stream, token);
 				switch (header.Opcode) {
 				case FrameOpcode.Binary:
 					if (textFragments.Count > 0)
@@ -189,8 +189,8 @@ namespace ActuallyWorkingWebSockets
 					// we don't have to expect that the client breaks the protocol
 					// if this continues binary, we already returned the stream
 				case FrameOpcode.Text:
-					var buffer = await (header.IsMasked ? new MaskingStream(stream,
-						             header.MaskData) : stream).ReadAllBytesAsync(header.PayloadLength);
+					var streamAfterMasking = header.IsMasked ? new MaskingStream(stream, header.MaskData) : stream;
+					var buffer = await streamAfterMasking.ReadAllBytesAsync(header.PayloadLength, token);
 
 					textFragments.Add(buffer);
 					if (header.GroupIsComplete) {
@@ -214,7 +214,7 @@ namespace ActuallyWorkingWebSockets
 				case FrameOpcode.Ping:
 				case FrameOpcode.Pong:
 				case FrameOpcode.Close:
-					await HandleControlFrame(header, stream, controlFrameHandler);
+					await HandleControlFrame(header, stream, controlFrameHandler, token);
 					if (header.Opcode == FrameOpcode.Close)
 						return null;
 					break;
@@ -226,10 +226,9 @@ namespace ActuallyWorkingWebSockets
 			return null;
 		}
 
-		public static async Task HandleControlFrame(FrameHeader header, Stream stream, Func<ControlFrame, Task> handler)
+		public static async Task HandleControlFrame(FrameHeader header, Stream stream, Func<ControlFrame, Task> handler, CancellationToken token)
 		{
-			var payload = await (header.IsMasked ? new MaskingStream(stream,
-				header.MaskData) : stream).ReadAllBytesAsync(header.PayloadLength);
+			var payload = await (header.IsMasked ? new MaskingStream(stream, header.MaskData) : stream).ReadAllBytesAsync(header.PayloadLength, token);
 			if (!header.GroupIsComplete)
 				throw new InvalidDataException("RFC states that control frames must not be fragmented");
 			await handler(new ControlFrame { FrameType = header.Opcode.ToControlFrameType(), Payload = payload });
