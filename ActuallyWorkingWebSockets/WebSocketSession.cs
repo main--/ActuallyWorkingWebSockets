@@ -49,6 +49,10 @@ namespace ActuallyWorkingWebSockets
 			return WebSocketProtocol.SendTextFrame(OutputStream, message, Masking);
 		}
 
+		public Task SendBinaryMessage(byte[] data, int offset, int length)
+		{
+			return WebSocketProtocol.SendByteArrayFrame(OutputStream, data, offset, length, Masking);
+		}
 		public Task SendStream(Stream stream)
 		{
 			return WebSocketProtocol.SendStream(OutputStream, stream, Masking);

@@ -103,6 +103,12 @@ namespace ActuallyWorkingWebSockets
 				Buffer.BlockCopy(data, 0, buffer, appDataOffset, data.Length);
 			});
 		}
+		public static Task SendByteArrayFrame(Synchronized<Stream> stream, byte[] data, int offset, int length, bool masking)
+		{
+			return SendFixedFrame(stream, FrameOpcode.Binary, length, masking, (buffer, appDataOffset) => {
+				Buffer.BlockCopy(data, offset, buffer, appDataOffset, length);
+			});
+		}
 
 		public static Task SendControlFrame(Synchronized<Stream> stream, ControlFrame frame)
 		{
