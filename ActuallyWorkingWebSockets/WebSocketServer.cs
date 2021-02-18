@@ -109,6 +109,17 @@ namespace ActuallyWorkingWebSockets
 
 					Debug.WriteLine("found end of headers");
 
+					// This is a dirty hack that should be replaced in the future
+					// We're not using this code-path a lot, because it's mostly 
+					// handled in charizard. But I need this for one thing, so'
+					// we need to 'fix' it here as well. This should do it.
+					// It specifically targets the ClientWebSocket of .NET, that
+					// sends very annoying and rather nonsensical headers.
+					// (HTTP1.1 doesn't do keep-alive on websockets, the connection is
+					// dropped after closing)
+					if (headers[Connection].ToLowerInvariant() == "upgrade,keep-alive")
+						headers[Connection] = "upgrade";
+
 					if ((headers[Connection].ToLowerInvariant() != "upgrade")
 					    || (headers[Upgrade].ToLowerInvariant() != "websocket"))
 						return; // invalid headers, fuck it.
