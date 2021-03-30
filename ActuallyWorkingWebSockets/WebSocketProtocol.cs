@@ -26,14 +26,18 @@ namespace ActuallyWorkingWebSockets
 
 		private static void BuildFrameHeader(FrameOpcode opcode, int appDataLength, bool masking, out byte[] maskData, out byte[] buffer, out int appDataOffset, bool bareHeader)
 		{
-			var requiredLengthBits = MyMath.Log2(appDataLength);
-
-			var plm = PayloadLengthMode.None;
-			foreach (PayloadLengthMode mode in Enum.GetValues(typeof(PayloadLengthMode))) {
-				if (((int)mode) >= requiredLengthBits) {
-					plm = mode;
-					break;
-				}
+			PayloadLengthMode plm;
+			if (appDataLength < 126)
+			{
+				plm = PayloadLengthMode.Short;
+			}
+			else if (appDataLength <= UInt16.MaxValue)
+			{
+				plm = PayloadLengthMode.Medium;
+			}
+			else
+			{
+				plm = PayloadLengthMode.Long;
 			}
 
 			// TODO: implement extensions
